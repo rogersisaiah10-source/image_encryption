@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Image Encryptor / Decryptor</title>
+<style>
+  body {
+    font-family: "Segoe UI", Roboto, sans-serif;
+    text-align: center;
+    background: linear-gradient(135deg, #1e1e2f, #2c2c44);
+    color: #f0f0f0;
+    margin: 0;
+    padding: 0;
+  }
+  h1 {
+    margin: 20px 0;
+    font-size: 28px;
+    color: #ffdd57;
+    text-shadow: 1px 1px 3px #000;
+  }
+  .tabs {
+    margin: 20px auto;
+    width: 90%;
+    max-width: 600px;
+    background: #2e2e40;
+    border-radius: 10px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    padding: 20px;
+  }
+  .tab-buttons {
+    display: flex;
+    margin-bottom: 20px;
+  }
+  .tab-buttons button {
+    flex: 1;
+    padding: 12px;
+    border: none;
+    cursor: pointer;
+    background: #3a3a55;
+    color: #eee;
+    font-size: 16px;
+    transition: background 0.3s;
+    border-radius: 8px 8px 0 0;
+  }
+  .tab-buttons button.active {
+    background: #ffdd57;
+    color: #222;
+    font-weight: bold;
+  }
+  .tab-content {
+    display: none;
+    padding: 15px;
+    background: #252537;
+    border-radius: 0 0 10px 10px;
+  }
+  .tab-content.active { display: block; }
+  input[type="file"], input[type="password"] {
+    margin: 10px 0;
+    padding: 10px;
+    border: none;
+    border-radius: 6px;
+    width: 80%;
+    max-width: 300px;
+    font-size: 14px;
+  }
+  button.action {
+    margin-top: 10px;
+    padding: 12px 20px;
+    border: none;
+    border-radius: 6px;
+    background: #ffdd57;
+    color: #222;
+    font-size: 16px;
+    cursor: pointer;
+    transition: transform 0.2s, background 0.3s;
+  }
+  button.action:hover {
+    background: #ffcc33;
+    transform: scale(1.05);
+  }
+  canvas {
+    border: 2px solid #444;
+    margin-top: 15px;
+    max-width: 100%;
+    border-radius: 6px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.6);
+  }
+  a.download {
+    display: inline-block;
+    margin-top: 15px;
+    padding: 10px 18px;
+    background: #3a9ff5;
+    color: #fff;
+    border-radius: 6px;
+    text-decoration: none;
+    font-size: 14px;
+    transition: background 0.3s, transform 0.2s;
+  }
+  a.download:hover {
+    background: #1c7ed6;
+    transform: scale(1.05);
+  }
+</style>
+</head>
+<body>
+<h1>🔐 Image Encryptor / Decryptor</h1>
+
+<div class="tabs">
+  <div class="tab-buttons">
+    <button id="encryptTab" class="active">Encrypt</button>
+    <button id="decryptTab">Decrypt</button>
+  </div>
+
+  <!-- Encrypt Tab -->
+  <div id="encryptContent" class="tab-content active">
+    <input type="file" id="encryptFile" accept="image/*"><br>
+    <input type="password" id="encryptPass" placeholder="Enter passphrase"><br>
+    <button class="action" id="encryptBtn">Encrypt</button><br>
+    <canvas id="encryptCanvas"></canvas><br>
+    <a id="encryptDownload" class="download" style="display:none">⬇ Download Encrypted Image</a>
+  </div>
+
+  <!-- Decrypt Tab -->
+  <div id="decryptContent" class="tab-content">
+    <input type="file" id="decryptFile" accept="image/*"><br>
+    <input type="password" id="decryptPass" placeholder="Enter passphrase"><br>
+    <button class="action" id="decryptBtn">Decrypt</button><br>
+    <canvas id="decryptCanvas"></canvas><br>
+    <a id="decryptDownload" class="download" style="display:none">⬇ Download Decrypted Image</a>
+  </div>
+</div>
+
+<script>
+// Simple PRNG based on passphrase
+function seededRandomGenerator(seed) {
+  let value = seed % 2147483647;
+  return function() {
+    value = value * 16807 % 2147483647;
+    return value % 256;
+  };
+}
+function getSeed(passphrase) {
+  let seed = 0;
+  for (let i = 0; i < passphrase.length; i++) {
+    seed += passphrase.charCodeAt(i);
+  }
+  return seed;
+}
+function processImage(image, passphrase, canvasId, linkId) {
+  const canvas = document.getElementById(canvasId);
+  const ctx = canvas.getContext("2d");
+  canvas.width = image.width;
+  canvas.height = image.height;
+  ctx.drawImage(image, 0, 0);
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const data = imageData.data;
+  const seed = getSeed(passphrase);
+  const rand = seededRandomGenerator(seed);
+  for (let i = 0; i < data.length; i += 4) {
+    data[i]   = data[i]   ^ rand();
+    data[i+1] = data[i+1] ^ rand();
+    data[i+2] = data[i+2] ^ rand();
+  }
+  ctx.putImageData(imageData, 0, 0);
+  const link = document.getElementById(linkId);
+  link.href = canvas.toDataURL("image/png");
+  link.download = canvasId === "encryptCanvas" ? "encrypted.png" : "decrypted.png";
+  link.style.display = "inline-block";
+}
+function handleFile(inputId, passId, canvasId, linkId) {
+  const passphrase = document.getElementById(passId).value;
+  const fileInput = document.getElementById(inputId);
+  if (!fileInput.files[0] || !passphrase) {
+    alert("Please select an image and enter a passphrase!");
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const img = new Image();
+    img.onload = function() {
+      processImage(img, passphrase, canvasId, linkId);
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(fileInput.files[0]);
+}
+document.getElementById("encryptBtn").onclick = () => {
+  handleFile("encryptFile", "encryptPass", "encryptCanvas", "encryptDownload");
+};
+document.getElementById("decryptBtn").onclick = () => {
+  handleFile("decryptFile", "decryptPass", "decryptCanvas", "decryptDownload");
+};
+// Tab switching
+document.getElementById("encryptTab").onclick = () => {
+  document.getElementById("encryptTab").classList.add("active");
+  document.getElementById("decryptTab").classList.remove("active");
+  document.getElementById("encryptContent").classList.add("active");
+  document.getElementById("decryptContent").classList.remove("active");
+};
+document.getElementById("decryptTab").onclick = () => {
+  document.getElementById("decryptTab").classList.add("active");
+  document.getElementById("encryptTab").classList.remove("active");
+  document.getElementById("decryptContent").classList.add("active");
+  document.getElementById("encryptContent").classList.remove("active");
+};
+</script>
+</body>
+</html>
+
